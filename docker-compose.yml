@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mailcow-cleaner:
     build: .
@@ -12,11 +10,5 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - SECRET_KEY=${SECRET_KEY:-change-me-to-something-random}
+      - APP_PASSWORD=${APP_PASSWORD:-admin}
       - DATA_DIR=/app/data
-    networks:
-      - mailcow-network
-
-networks:
-  mailcow-network:
-    name: mailcow-network
-    external: true

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mailcow Cleaner - Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: { DEFAULT: 'hsl(221.2 83.2% 53.3%)', foreground: 'hsl(210 40% 98%)' },
+            muted: { DEFAULT: 'hsl(210 40% 96.1%)', foreground: 'hsl(215.4 16.3% 46.9%)' },
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="bg-zinc-50 text-zinc-900 antialiased" x-data="login()" x-cloak>
+  <div class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-sm">
+      <div class="text-center mb-8">
+        <svg class="w-10 h-10 text-primary mx-auto mb-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        <h1 class="text-xl font-semibold text-zinc-800">Mailcow Cleaner</h1>
+        <p class="text-sm text-zinc-500 mt-1">Please sign in to continue</p>
+      </div>
+
+      <form @submit.prevent="login()" class="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-zinc-500 mb-1">Password</label>
+          <input type="password" x-model="password" placeholder="Enter password"
+            class="w-full px-3 py-2 text-sm border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors">
+        </div>
+
+        <div x-show="error" class="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg" x-text="error"></div>
+
+        <button type="submit" :disabled="loading"
+          class="w-full py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors">
+          <span x-show="!loading">Sign in</span>
+          <span x-show="loading" class="spinner"></span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <style>
+    .spinner { border: 2px solid hsl(215.4 16.3% 90%); border-top-color: white; border-radius: 50%; width: 1rem; height: 1rem; animation: spin 0.6s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+
+  <script>
+    function login() {
+      return {
+        password: '',
+        loading: false,
+        error: '',
+        async login() {
+          if (!this.password) return;
+          this.loading = true;
+          this.error = '';
+          try {
+            const r = await fetch('/api/login', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({password: this.password}),
+            });
+            if (r.ok) {
+              window.location.href = '/';
+            } else {
+              const d = await r.json();
+              this.error = d.error || 'Invalid password';
+            }
+          } catch(e) {
+            this.error = 'Connection error';
+          }
+          this.loading = false;
+        },
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import wraps
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect
 
 from app.config_manager import load_config, save_config, load_history, save_history
 from app.mailcow_api import MailcowAPI
@@ -10,6 +11,19 @@ from app.doveadm_exec import preview as dove_preview, execute as dove_execute
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'mailcow-cleaner-change-me')
+app.permanent_session_lifetime = timedelta(hours=int(os.environ.get('SESSION_LIFETIME_HOURS', 24)))
+APP_PASSWORD = os.environ.get('APP_PASSWORD', 'admin')
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('authenticated'):
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'error': 'Authentication required'}), 401
+            return redirect('/login')
+        return f(*args, **kwargs)
+    return decorated
 
 
 def get_api() -> MailcowAPI | None:
@@ -19,12 +33,40 @@ def get_api() -> MailcowAPI | None:
     return MailcowAPI(cfg['mailcow_url'], cfg['api_key'])
 
 
+@app.route('/login')
+def login_page():
+    return render_template('login.html')
+
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()
+    if data.get('password') == APP_PASSWORD:
+        session['authenticated'] = True
+        session.permanent = True
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Invalid password'}), 401
+
+
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    session.clear()
+    return jsonify({'success': True})
+
+
+@app.route('/api/check-auth')
+def check_auth():
+    return jsonify({'authenticated': session.get('authenticated', False)})
+
+
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 
 @app.route('/api/config', methods=['GET', 'POST'])
+@login_required
 def config():
     if request.method == 'POST':
         data = request.get_json()
@@ -45,6 +87,7 @@ def config():
 
 
 @app.route('/api/test', methods=['GET'])
+@login_required
 def test_connection():
     api = get_api()
     if not api:
@@ -59,6 +102,7 @@ def test_connection():
 
 
 @app.route('/api/domains', methods=['GET'])
+@login_required
 def get_domains():
     api = get_api()
     if not api:
@@ -77,6 +121,7 @@ def get_domains():
 
 
 @app.route('/api/mailboxes', methods=['GET'])
+@login_required
 def get_mailboxes():
     api = get_api()
     if not api:
@@ -104,6 +149,7 @@ def get_mailboxes():
 
 
 @app.route('/api/all-mailboxes', methods=['GET'])
+@login_required
 def get_all_mailboxes():
     api = get_api()
     if not api:
@@ -125,6 +171,7 @@ def get_all_mailboxes():
 
 
 @app.route('/api/preview', methods=['POST'])
+@login_required
 def preview_cleanup():
     api = get_api()
     if not api:
@@ -173,6 +220,7 @@ def preview_cleanup():
 
 
 @app.route('/api/cleanup', methods=['POST'])
+@login_required
 def cleanup():
     api = get_api()
     if not api:
@@ -234,6 +282,7 @@ def cleanup():
 
 
 @app.route('/api/history', methods=['GET'])
+@login_required
 def get_history():
     return jsonify({'history': load_history()})
 
