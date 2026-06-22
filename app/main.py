@@ -315,7 +315,7 @@ def test_doveadm():
                 'stdout': f'doveadm found at: {result.stdout.strip()}' if result.returncode == 0 else '',
                 'stderr': result.stderr.strip()[:500] if not result.returncode == 0 else '',
                 'command': ' '.join(shlex.quote(c) for c in cmd),
-                'error': None if result.returncode == 0 else f'doveadm not found in container {dovecot_container}',
+                    'error': None if result.returncode == 0 else f'"which doveadm" failed (exit {result.returncode}): {result.stderr.strip()[:300]}',
             })
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})

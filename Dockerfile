@@ -1,8 +1,11 @@
 FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    docker.io \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-26.1.4.tgz -o /tmp/docker.tgz \
+    && tar -xzf /tmp/docker.tgz -C /usr/local/bin --strip-components=1 docker/docker \
+    && rm /tmp/docker.tgz
 
 WORKDIR /app
 

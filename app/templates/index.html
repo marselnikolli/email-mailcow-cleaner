@@ -114,13 +114,17 @@
               </label>
             </div>
 
-            <div x-show="doveadmTest.result" x-transition class="text-xs rounded-lg overflow-hidden">
-              <div class="px-3 py-2 font-medium" :class="doveadmTest.result.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'" x-text="doveadmTest.result.success ? 'Dovecot OK' : 'Dovecot Error'"></div>
-              <pre class="bg-zinc-900 text-zinc-200 p-3 overflow-x-auto whitespace-pre-wrap break-all max-h-40"><span x-text="doveadmTest.result.command"></span>
-<span x-show="doveadmTest.result.stdout" x-text="'stdout: ' + doveadmTest.result.stdout"></span>
-<span x-show="doveadmTest.result.stderr" class="text-red-300" x-text="'stderr: ' + doveadmTest.result.stderr"></span>
-<span x-show="doveadmTest.result.error" class="text-red-300" x-text="'error: ' + doveadmTest.result.error"></span></pre>
-            </div>
+            <template x-if="doveadmTest.result">
+              <div x-transition class="text-xs rounded-lg overflow-hidden">
+                <div class="px-3 py-2 font-medium" :class="doveadmTest.result.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
+                  <span x-text="doveadmTest.result.success ? 'Dovecot OK' : 'Dovecot Error'"></span>
+                </div>
+                <pre class="bg-zinc-900 text-zinc-200 p-3 overflow-x-auto whitespace-pre-wrap break-all max-h-40"><span x-text="doveadmTest.result.command || ''"></span>
+<span x-show="doveadmTest.result.stdout" x-text="'stdout: ' + (doveadmTest.result.stdout || '')"></span>
+<span x-show="doveadmTest.result.stderr" class="text-red-300" x-text="'stderr: ' + (doveadmTest.result.stderr || '')"></span>
+<span x-show="doveadmTest.result.error" class="text-red-300" x-text="'error: ' + (doveadmTest.result.error || '')"></span></pre>
+              </div>
+            </template>
           </div>
 
           <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5 space-y-4">
