@@ -239,6 +239,14 @@
                       <span class="badge" :class="count >= 0 ? 'bg-zinc-100 text-zinc-700' : 'bg-red-50 text-red-600'" x-text="`${folder}: ${count >= 0 ? count : 'error'}`"></span>
                     </template>
                   </div>
+                  <details class="mt-2">
+                    <summary class="text-xs text-zinc-400 cursor-pointer hover:text-zinc-600">Commands</summary>
+                    <div class="mt-1 space-y-1">
+                      <template x-for="cmd in (res.commands || [])" :key="cmd">
+                        <pre class="text-xs bg-zinc-50 p-2 rounded overflow-x-auto whitespace-pre-wrap break-all" x-text="cmd"></pre>
+                      </template>
+                    </div>
+                  </details>
                 </div>
               </template>
             </div>
@@ -395,11 +403,10 @@
             const d = await r.json();
             if (d.configured) {
               this.config.mailcow_url = d.mailcow_url;
-              this.config.api_key = d.api_key;
               this.config.dovecot_container = d.dovecot_container;
               this.config.use_header = d.use_header;
               await this.loadDomains();
-              await this.testConnection();
+              this.connectionOk = true;
             }
           } catch(e) {}
         },
@@ -416,7 +423,6 @@
           this.testing = true;
           this.connectionStatus = '';
           try {
-            await this.saveConfig();
             const r = await fetch('/api/test');
             const d = await r.json();
             this.connectionOk = d.success;

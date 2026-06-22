@@ -17,45 +17,53 @@ def _build_cmd(
     match_or: bool,
     use_header: bool,
 ) -> list[str]:
-    quoted_folder = folder
     cmd = ['docker', 'exec', '{container}', 'doveadm', action, '-u', mailbox]
 
     from_key = 'HEADER From' if use_header else 'from'
     unit_map = {'days': 'd', 'weeks': 'w', 'months': 'M', 'years': 'y'}
     age_str = f'{age_value}{unit_map.get(age_unit, "d")}' if age_value is not None and age_unit else None
 
-    if match_or and len(from_addrs) > 1:
-        parts = []
-        for addr in from_addrs[:-1]:
-            parts.append('OR')
-            parts.append(from_key)
-            parts.append(addr)
-        parts.append(from_key)
-        parts.append(from_addrs[-1])
-    else:
-        parts = []
-        for addr in from_addrs:
-            parts.append(from_key)
-            parts.append(addr)
+    conditions = []
+
+    for addr in from_addrs:
+        conditions.append((from_key, addr))
 
     if subject:
-        if len(from_addrs) > 0:
-            if match_or:
-                pass
-            else:
-                parts.append('subject')
-                parts.append(subject)
-        else:
-            parts.append('subject')
-            parts.append(subject)
+        conditions.append(('subject', subject))
 
     if age_str:
-        parts.append('savedbefore')
-        parts.append(age_str)
+        conditions.append(('savedbefore', age_str))
 
-    cmd.extend(['mailbox', quoted_folder])
+    parts = _build_doveadm_query(conditions, match_or)
+
+    cmd.extend(['mailbox', folder])
     cmd.extend(parts)
     return cmd
+
+
+def _build_doveadm_query(conditions: list[tuple[str, str]], use_or: bool) -> list[str]:
+    if not conditions:
+        return []
+
+    if len(conditions) == 1:
+        key, val = conditions[0]
+        return [key, val]
+
+    if use_or:
+        result = []
+        for key, val in conditions[:-1]:
+            result.append('OR')
+            result.append(key)
+            result.append(val)
+        result.append(conditions[-1][0])
+        result.append(conditions[-1][1])
+        return result
+    else:
+        result = []
+        for key, val in conditions:
+            result.append(key)
+            result.append(val)
+        return result
 
 
 def _run(cmd_template, container: str, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -77,10 +85,13 @@ def preview(
     total = 0
     per_folder = {}
     errors = []
+    commands_run = []
 
     for folder in folders:
         cmd = _build_cmd('search', mailbox, folder, from_addrs, subject,
                          age_value, age_unit, match_or, use_header)
+        resolved = [c.replace('{container}', dovecot_container) if '{container}' in c else c for c in cmd]
+        commands_run.append(' '.join(shlex.quote(c) for c in resolved))
         try:
             result = _run(cmd, dovecot_container)
             if result.returncode == 0:
@@ -105,6 +116,7 @@ def preview(
         'total': total,
         'per_folder': per_folder,
         'errors': errors,
+        'commands': commands_run,
     }
 
 
@@ -122,10 +134,13 @@ def execute(
     deleted = 0
     per_folder = {}
     errors = []
+    commands_run = []
 
     for folder in folders:
         cmd = _build_cmd('expunge', mailbox, folder, from_addrs, subject,
                          age_value, age_unit, match_or, use_header)
+        resolved = [c.replace('{container}', dovecot_container) if '{container}' in c else c for c in cmd]
+        commands_run.append(' '.join(shlex.quote(c) for c in resolved))
         try:
             result = _run(cmd, dovecot_container)
             if result.returncode == 0:
@@ -148,4 +163,5 @@ def execute(
         'deleted': deleted,
         'per_folder': per_folder,
         'errors': errors,
+        'commands': commands_run,
     }

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import os
+import subprocess
+import shlex
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -279,6 +281,32 @@ def cleanup():
         'success': all_ok,
         'results': results,
     })
+
+
+@app.route('/api/test-doveadm', methods=['POST'])
+@login_required
+def test_doveadm():
+    data = request.get_json()
+    mailbox = data.get('mailbox', '')
+    folder = data.get('folder', 'INBOX')
+    dovecot_container = data.get('dovecot_container', 'dovecot-mailcow')
+
+    cmd = ['docker', 'exec', dovecot_container, 'doveadm', 'search', '-u', mailbox, 'mailbox', folder, 'ALL']
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        return jsonify({
+            'success': result.returncode == 0,
+            'returncode': result.returncode,
+            'stdout': result.stdout.strip()[:2000],
+            'stderr': result.stderr.strip()[:2000],
+            'command': ' '.join(shlex.quote(c) for c in cmd),
+        })
+    except FileNotFoundError:
+        return jsonify({'success': False, 'error': 'Docker CLI not found in container', 'command': ' '.join(shlex.quote(c) for c in cmd)})
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': 'Command timed out', 'command': ' '.join(shlex.quote(c) for c in cmd)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'command': ' '.join(shlex.quote(c) for c in cmd)})
 
 
 @app.route('/api/history', methods=['GET'])
