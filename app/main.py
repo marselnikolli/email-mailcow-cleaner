@@ -111,13 +111,20 @@ def get_domains():
         return jsonify({'success': False, 'error': 'Not configured'})
     try:
         data = api.get_domains()
+        if not isinstance(data, list):
+            return jsonify({'success': False, 'error': f'Unexpected API response (not a list)', 'raw': str(data)[:500]})
         domains = []
         for d in data:
             if isinstance(d, dict) and 'domain' in d:
                 domains.append({'name': d['domain'], 'active': d.get('active', '1') == '1'})
             elif isinstance(d, str):
                 domains.append({'name': d, 'active': True})
-        return jsonify({'success': True, 'domains': sorted(domains, key=lambda x: x['name'])})
+        return jsonify({
+            'success': True,
+            'domains': sorted(domains, key=lambda x: x['name']),
+            'raw_count': len(data),
+            'raw_sample': str(data[:3])[:300],
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

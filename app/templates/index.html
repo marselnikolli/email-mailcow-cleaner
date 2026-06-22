@@ -142,7 +142,7 @@
             <div x-show="targetMode === 'domain'">
               <label class="block text-xs font-medium text-zinc-500 mb-1.5">Domain</label>
               <div x-show="domains.length === 0 && !domainsError" class="text-sm text-zinc-400 italic py-1">No domains loaded. Click <button @click="loadDomains()" class="text-primary hover:underline text-xs">Refresh</button> or check connection config.</div>
-              <div x-show="domainsError" class="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-1.5" x-text="domainsError"></div>
+              <div x-show="domainsError" class="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-1.5 whitespace-pre-wrap" x-text="domainsError"></div>
               <select x-show="domains.length > 0" x-model="selectedDomain" @change="fetchMailboxes()" class="w-full text-sm border border-zinc-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30">
                 <option value="">-- Select domain --</option>
                 <template x-for="d in domains" :key="d.name">
@@ -463,9 +463,16 @@
             const d = await r.json();
             if (d.success) {
               this.domains = d.domains;
-              if (!d.domains.length) this.domainsError = 'API returned empty domain list. Check your API key permissions (need read-write access to domains).';
+              if (!d.domains.length) {
+                let detail = '';
+                if (d.raw_count !== undefined) detail = ` (API returned ${d.raw_count} items)`;
+                if (d.raw_sample) detail += `\nSample: ${d.raw_sample}`;
+                this.domainsError = 'API returned empty domain list. Check API key permissions or mailcow has no domains.' + detail;
+              }
             } else {
-              this.domainsError = 'Domains API error: ' + d.error;
+              let detail = '';
+              if (d.raw) detail = '\nRaw response: ' + d.raw;
+              this.domainsError = 'Domains API error: ' + d.error + detail;
             }
           } catch(e) { this.domainsError = 'Failed to load domains: ' + e.message; }
         },
