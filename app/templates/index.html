@@ -395,6 +395,7 @@
             const d = await r.json();
             if (d.configured) {
               this.config.mailcow_url = d.mailcow_url;
+              this.config.api_key = d.api_key;
               this.config.dovecot_container = d.dovecot_container;
               this.config.use_header = d.use_header;
               await this.loadDomains();
@@ -408,6 +409,7 @@
         async saveConfig() {
           await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(this.config) });
           this.toastMsg('Configuration saved');
+          this.loadDomains();
         },
 
         async testConnection() {
@@ -419,7 +421,7 @@
             const d = await r.json();
             this.connectionOk = d.success;
             this.connectionStatus = d.success ? 'API: ' + d.message : 'Error: ' + d.error;
-            if (d.success) this.toastMsg('Connection OK');
+            if (d.success) { this.toastMsg('Connection OK'); this.loadDomains(); }
           } catch(e) {
             this.connectionOk = false;
             this.connectionStatus = 'Request failed: ' + e.message;
