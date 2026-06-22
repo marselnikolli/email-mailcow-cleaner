@@ -115,8 +115,10 @@ def get_domains():
             return jsonify({'success': False, 'error': f'Unexpected API response (not a list)', 'raw': str(data)[:500]})
         domains = []
         for d in data:
-            if isinstance(d, dict) and 'domain' in d:
-                domains.append({'name': d['domain'], 'active': d.get('active', '1') == '1'})
+            if isinstance(d, dict):
+                name = d.get('domain_name') or d.get('domain') or d.get('fqdn') or ''
+                if name:
+                    domains.append({'name': name, 'active': d.get('active', '1') == '1'})
             elif isinstance(d, str):
                 domains.append({'name': d, 'active': True})
         return jsonify({
