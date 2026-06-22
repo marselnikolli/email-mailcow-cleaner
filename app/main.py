@@ -288,10 +288,40 @@ def cleanup():
 def test_doveadm():
     data = request.get_json()
     mailbox = data.get('mailbox', '')
-    folder = data.get('folder', 'INBOX')
     dovecot_container = data.get('dovecot_container', 'dovecot-mailcow')
 
-    cmd = ['docker', 'exec', dovecot_container, 'doveadm', 'search', '-u', mailbox, 'mailbox', folder, 'ALL']
+    # First, verify container exists
+    ps_cmd = ['docker', 'ps', '--format', '{{.Names}}', '--filter', f'name={dovecot_container}']
+    try:
+        ps_result = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=10)
+        if dovecot_container not in ps_result.stdout:
+            return jsonify({
+                'success': False,
+                'error': f'Container "{dovecot_container}" not found. Running containers: {ps_result.stdout.strip()[:500]}',
+                'command': ' '.join(shlex.quote(c) for c in ps_cmd),
+            })
+    except FileNotFoundError:
+        return jsonify({'success': False, 'error': 'Docker CLI not found in container'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Docker ps failed: {e}'})
+
+    if not mailbox:
+        # Just verify container has doveadm
+        cmd = ['docker', 'exec', dovecot_container, 'which', 'doveadm']
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            return jsonify({
+                'success': result.returncode == 0,
+                'stdout': f'doveadm found at: {result.stdout.strip()}' if result.returncode == 0 else '',
+                'stderr': result.stderr.strip()[:500] if not result.returncode == 0 else '',
+                'command': ' '.join(shlex.quote(c) for c in cmd),
+                'error': None if result.returncode == 0 else f'doveadm not found in container {dovecot_container}',
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+
+    # Test actual doveadm search on a mailbox
+    cmd = ['docker', 'exec', dovecot_container, 'doveadm', 'search', '-u', mailbox, 'mailbox', 'INBOX', 'ALL']
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         return jsonify({

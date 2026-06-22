@@ -101,12 +101,25 @@
             <div x-show="connectionStatus" x-transition
               :class="connectionOk ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'"
               class="text-xs px-3 py-2 rounded-lg" x-text="connectionStatus"></div>
-            <div class="flex items-center gap-4 text-xs text-zinc-500">
-              <label class="flex items-center gap-1.5">
+
+            <div class="flex items-center gap-2">
+              <button @click="saveConfig()" class="px-3 py-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">Save config</button>
+              <button @click="testDoveadm()" :disabled="doveadmTest.working" class="px-3 py-1.5 text-xs font-medium border border-zinc-300 rounded-lg hover:bg-zinc-50 disabled:opacity-50 transition-colors">
+                <span x-show="!doveadmTest.working">Test Dovecot</span>
+                <span x-show="doveadmTest.working" class="spinner"></span>
+              </button>
+              <label class="flex items-center gap-1.5 text-xs text-zinc-500">
                 <input type="checkbox" x-model="config.use_header" class="rounded border-zinc-300 text-primary focus:ring-primary/30">
-                Use <code class="font-mono bg-zinc-100 px-1 rounded">HEADER From</code> matching
+                Use <code class="font-mono bg-zinc-100 px-1 rounded">HEADER From</code>
               </label>
-              <button @click="saveConfig()" class="text-primary hover:underline">Save config</button>
+            </div>
+
+            <div x-show="doveadmTest.result" x-transition class="text-xs rounded-lg overflow-hidden">
+              <div class="px-3 py-2 font-medium" :class="doveadmTest.result.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'" x-text="doveadmTest.result.success ? 'Dovecot OK' : 'Dovecot Error'"></div>
+              <pre class="bg-zinc-900 text-zinc-200 p-3 overflow-x-auto whitespace-pre-wrap break-all max-h-40"><span x-text="doveadmTest.result.command"></span>
+<span x-show="doveadmTest.result.stdout" x-text="'stdout: ' + doveadmTest.result.stdout"></span>
+<span x-show="doveadmTest.result.stderr" class="text-red-300" x-text="'stderr: ' + doveadmTest.result.stderr"></span>
+<span x-show="doveadmTest.result.error" class="text-red-300" x-text="'error: ' + doveadmTest.result.error"></span></pre>
             </div>
           </div>
 
@@ -124,7 +137,9 @@
 
             <div x-show="targetMode === 'domain'">
               <label class="block text-xs font-medium text-zinc-500 mb-1.5">Domain</label>
-              <select x-model="selectedDomain" @change="fetchMailboxes()" class="w-full text-sm border border-zinc-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30">
+              <div x-show="domains.length === 0 && !domainsError" class="text-sm text-zinc-400 italic py-1">No domains loaded. Click <button @click="loadDomains()" class="text-primary hover:underline text-xs">Refresh</button> or check connection config.</div>
+              <div x-show="domainsError" class="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-1.5" x-text="domainsError"></div>
+              <select x-show="domains.length > 0" x-model="selectedDomain" @change="fetchMailboxes()" class="w-full text-sm border border-zinc-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30">
                 <option value="">-- Select domain --</option>
                 <template x-for="d in domains" :key="d.name">
                   <option :value="d.name" x-text="d.name"></option>
@@ -368,10 +383,12 @@
         connectionOk: false,
         targetMode: 'domain',
         domains: [],
+        domainsError: '',
         selectedDomain: '',
         mailboxList: [],
         loadingMailboxes: false,
         selectedMailboxes: [],
+        doveadmTest: { result: null, working: false },
         filters: { from: '', subject: '', age_value: '', age_unit: 'days', folders: ['INBOX'], match_or: false },
         working: false,
         previewResult: null,
@@ -436,12 +453,17 @@
         },
 
         async loadDomains() {
+          this.domainsError = '';
           try {
             const r = await fetch('/api/domains');
             const d = await r.json();
-            if (d.success) this.domains = d.domains;
-            else this.toastMsg('Failed to load domains: ' + d.error);
-          } catch(e) { this.toastMsg('Failed to load domains'); }
+            if (d.success) {
+              this.domains = d.domains;
+              if (!d.domains.length) this.domainsError = 'API returned empty domain list. Check your API key permissions (need read-write access to domains).';
+            } else {
+              this.domainsError = 'Domains API error: ' + d.error;
+            }
+          } catch(e) { this.domainsError = 'Failed to load domains: ' + e.message; }
         },
 
         async fetchMailboxes() {
@@ -521,6 +543,25 @@
             this.toastMsg(d.success ? 'Cleanup completed' : 'Cleanup had errors');
           } catch(e) { this.toastMsg('Cleanup request failed'); }
           this.working = false;
+        },
+
+        async testDoveadm() {
+          this.doveadmTest = { result: null, working: true };
+          try {
+            const mailboxes = this.getEffectiveMailboxes();
+            const testMailbox = mailboxes.length > 0 ? mailboxes[0] : '';
+            const r = await fetch('/api/test-doveadm', {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({
+                mailbox: testMailbox,
+                dovecot_container: this.config.dovecot_container,
+              }),
+            });
+            this.doveadmTest.result = await r.json();
+          } catch(e) {
+            this.doveadmTest.result = { success: false, error: e.message };
+          }
+          this.doveadmTest.working = false;
         },
 
         async loadHistory() {
