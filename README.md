@@ -61,13 +61,14 @@ The cleaner needs access to `/var/run/docker.sock` on the host. This is **always
 
 ## Deployment
 
-### Option A: Standalone container (recommended)
-
-Clone this repo on your mailcow host and run:
+Clone this repo on your mailcow host, set a password, and run:
 
 ```bash
 git clone <this-repo> /opt/mailcow-cleaner
 cd /opt/mailcow-cleaner
+
+# Set a secure password (optional — defaults to "admin")
+export APP_PASSWORD=your-secure-password
 
 # Build and start
 docker compose up -d --build
@@ -80,40 +81,20 @@ The `docker-compose.yml` handles everything:
 - Builds the image
 - Creates a `data/` volume for config persistence
 - Mounts the Docker socket (read-only)
-- Joins the `mailcow-network` so it can resolve the mailcow API internally
 
-### Option B: Add to your mailcow override file
-
-Append this to your existing `docker-compose.override.yml` in your mailcow directory:
-
-```yaml
-version: '3.8'
-
-services:
-  mailcow-cleaner:
-    build: /path/to/mailcow-cleaner
-    container_name: mailcow-cleaner
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
-    volumes:
-      - /opt/mailcow-cleaner/data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - SECRET_KEY=generate-a-random-string-here
-    networks:
-      - mailcow-network
-```
-
-Then run from your mailcow directory:
+You can also set the password in a `.env` file next to `docker-compose.yml`:
 
 ```bash
-docker compose up -d
+APP_PASSWORD=your-secure-password
 ```
 
 ## First-time configuration
 
 Open `http://your-server:5000` in a browser.
+
+You will be greeted by a **login screen**. Enter the password set via the `APP_PASSWORD` environment variable (default: `admin`).
+
+After signing in:
 
 1. Go to the **Connection** section
 2. Enter your **Mailcow URL** — the external URL of your mailcow instance, e.g. `https://mail.example.com`
@@ -176,6 +157,8 @@ The **Header matching** toggle switches between:
 
 ## Security
 
+- **Password protection**: all pages and API endpoints require login via `APP_PASSWORD` env var (set a strong one)
+- **Session timeout**: sessions expire after 24 hours (configurable via `SESSION_LIFETIME_HOURS`)
 - The Docker socket is mounted **read-only** (`:ro`) — the container can only read it to exec commands, not manage Docker
 - Change the `SECRET_KEY` environment variable to a random string
 - Restrict access to port 5000 with a firewall if the tool is exposed to a network
