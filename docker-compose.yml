@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  mailcow-cleaner:
+    build: .
+    container_name: mailcow-cleaner
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-something-random}
+      - DATA_DIR=/app/data
+    networks:
+      - mailcow-network
+
+networks:
+  mailcow-network:
+    name: mailcow-network
+    external: true

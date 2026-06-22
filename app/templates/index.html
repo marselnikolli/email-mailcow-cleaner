@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mailcow Cleaner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            border: 'hsl(214.3 31.8% 91.4%)',
+            input: 'hsl(214.3 31.8% 91.4%)',
+            ring: 'hsl(222.2 84% 4.9%)',
+            background: 'hsl(0 0% 100%)',
+            foreground: 'hsl(222.2 84% 4.9%)',
+            muted: { DEFAULT: 'hsl(210 40% 96.1%)', foreground: 'hsl(215.4 16.3% 46.9%)' },
+            accent: { DEFAULT: 'hsl(210 40% 96.1%)', foreground: 'hsl(222.2 47.4% 11.2%)' },
+            destructive: { DEFAULT: 'hsl(0 84.2% 60.2%)', foreground: 'hsl(210 40% 98%)' },
+            card: { DEFAULT: 'hsl(0 0% 100%)', foreground: 'hsl(222.2 84% 4.9%)' },
+            popover: { DEFAULT: 'hsl(0 0% 100%)', foreground: 'hsl(222.2 84% 4.9%)' },
+            primary: { DEFAULT: 'hsl(221.2 83.2% 53.3%)', foreground: 'hsl(210 40% 98%)' },
+            secondary: { DEFAULT: 'hsl(210 40% 96.1%)', foreground: 'hsl(222.2 47.4% 11.2%)' },
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    * { scrollbar-width: thin; }
+    .fade-in { animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .spinner { border: 2px solid hsl(215.4 16.3% 46.9%); border-top-color: hsl(221.2 83.2% 53.3%); border-radius: 50%; width: 1rem; height: 1rem; animation: spin 0.6s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .badge { display: inline-flex; align-items: center; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="bg-zinc-50 text-zinc-900 antialiased" x-data="app()" x-cloak>
+  <div class="flex h-screen">
+    <aside class="w-56 bg-white border-r border-zinc-200 flex flex-col shrink-0">
+      <div class="h-14 flex items-center gap-2 px-5 border-b border-zinc-200 font-semibold text-sm">
+        <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        Mailcow Cleaner
+      </div>
+      <nav class="flex-1 p-2 space-y-1 text-sm">
+        <template x-for="item in navItems" :key="item.id">
+          <button @click="page = item.id"
+            :class="page === item.id ? 'bg-primary/10 text-primary font-medium' : 'text-zinc-600 hover:bg-zinc-100'"
+            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors">
+            <span x-html="item.icon"></span>
+            <span x-text="item.label"></span>
+          </button>
+        </template>
+      </nav>
+      <div class="p-3 border-t border-zinc-200">
+        <div class="text-xs text-zinc-400">v1.0 &middot; Private tool</div>
+      </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <header class="h-14 bg-white border-b border-zinc-200 flex items-center px-6 gap-3 shrink-0">
+        <h1 class="font-semibold text-base" x-text="headerTitle"></h1>
+        <template x-if="statusBadge">
+          <span :class="statusBadge.color" class="badge text-xs" x-text="statusBadge.text"></span>
+        </template>
+      </header>
+
+      <div class="flex-1 overflow-y-auto p-6">
+        <div x-show="page === 'cleanup'" class="fade-in space-y-6 max-w-4xl">
+          <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5 space-y-4">
+            <h2 class="font-semibold text-sm text-zinc-800">Connection</h2>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-zinc-500 mb-1">Mailcow URL</label>
+                <input type="text" x-model="config.mailcow_url" placeholder="https://mail.example.com"
+                  class="w-full px-3 py-1.5 text-sm border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-zinc-500 mb-1">API Key (rw)</label>
+                <input type="password" x-model="config.api_key" placeholder="RW API key"
+                  class="w-full px-3 py-1.5 text-sm border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors">
+              </div>
+              <div class="flex items-end gap-2">
+                <div class="flex-1">
+                  <label class="block text-xs font-medium text-zinc-500 mb-1">Dovecot Container</label>
+                  <input type="text" x-model="config.dovecot_container"
+                    class="w-full px-3 py-1.5 text-sm border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors">
+                </div>
+                <button @click="testConnection()" :disabled="testing"
+                  class="px-3 py-1.5 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors shrink-0">
+                  <span x-show="!testing">Test</span>
+                  <span x-show="testing" class="spinner"></span>
+                </button>
+              </div>
+            </div>
+            <div x-show="connectionStatus" x-transition
+              :class="connectionOk ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'"
+              class="text-xs px-3 py-2 rounded-lg" x-text="connectionStatus"></div>
+            <div class="flex items-center gap-4 text-xs text-zinc-500">
+              <label class="flex items-center gap-1.5">
+                <input type="checkbox" x-model="config.use_header" class="rounded border-zinc-300 text-primary focus:ring-primary/30">
+                Use <code class="font-mono bg-zinc-100 px-1 rounded">HEADER From</code> matching
+              </label>
+              <button @click="saveConfig()" class="text-primary hover:underline">Save config</button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5 space-y-4">
+            <h2 class="font-semibold text-sm text-zinc-800">Target</h2>
+            <div class="flex items-center gap-4">
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-zinc-500">Mode:</label>
+                <select x-model="targetMode" class="text-sm border border-zinc-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  <option value="domain">Clean entire domain</option>
+                  <option value="mailboxes">Select specific mailboxes</option>
+                </select>
+              </div>
+            </div>
+
+            <div x-show="targetMode === 'domain'">
+              <label class="block text-xs font-medium text-zinc-500 mb-1.5">Domain</label>
+              <select x-model="selectedDomain" @change="fetchMailboxes()" class="w-full text-sm border border-zinc-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">-- Select domain --</option>
+                <template x-for="d in domains" :key="d.name">
+                  <option :value="d.name" x-text="d.name"></option>
+                </template>
+              </select>
+            </div>
+
+            <div x-show="targetMode === 'mailboxes'">
+              <div class="flex gap-2 items-center mb-1.5">
+                <label class="text-xs font-medium text-zinc-500">Mailboxes</label>
+                <button @click="fetchMailboxes()" class="text-xs text-primary hover:underline">Refresh</button>
+              </div>
+              <div x-show="loadingMailboxes" class="flex items-center gap-2 text-sm text-zinc-400 py-2">
+                <span class="spinner"></span> Loading mailboxes...
+              </div>
+              <div x-show="!loadingMailboxes && mailboxList.length === 0" class="text-sm text-zinc-400 py-2 italic">
+                No mailboxes loaded. Click Refresh or check connection.
+              </div>
+              <div class="max-h-40 overflow-y-auto border border-zinc-200 rounded-lg divide-y divide-zinc-100" x-show="mailboxList.length > 0">
+                <template x-for="mb in mailboxList" :key="mb.email">
+                  <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-50 text-sm cursor-pointer">
+                    <input type="checkbox" :value="mb.email" x-model="selectedMailboxes" class="rounded border-zinc-300 text-primary focus:ring-primary/30">
+                    <span class="font-medium" x-text="mb.email"></span>
+                    <span x-show="mb.name" class="text-xs text-zinc-400" x-text="`(${mb.name})`"></span>
+                  </label>
+                </template>
+              </div>
+            </div>
+
+            <div x-show="targetMode === 'domain' && selectedDomain">
+              <div class="flex items-center gap-2 text-xs text-zinc-500">
+                <span class="spinner" x-show="loadingMailboxes"></span>
+                <span x-text="`${mailboxList.length} mailbox(es) in this domain will be targeted`"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5 space-y-4">
+            <h2 class="font-semibold text-sm text-zinc-800">Filters</h2>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-zinc-500 mb-1">From (sender) — comma separated</label>
+                <input type="text" x-model="filters.from" placeholder="spam@example.com, newsletter@mail.com"
+                  class="w-full px-3 py-1.5 text-sm border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-zinc-500 mb-1">Subject contains</label>
+                <input type="text" x-model="filters.subject" placeholder="e.g. Newsletter"
+                  class="w-full px-3 py-1.5 text-sm border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors">
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-zinc-500 mb-1">Age</label>
+                <div class="flex gap-2">
+                  <input type="number" x-model="filters.age_value" placeholder="30" min="1"
+                    class="w-20 px-3 py-1.5 text-sm border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors">
+                  <select x-model="filters.age_unit" class="flex-1 text-sm border border-zinc-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    <option value="days">Days</option>
+                    <option value="weeks">Weeks</option>
+                    <option value="months">Months</option>
+                    <option value="years">Years</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-zinc-500 mb-1">Folders</label>
+                <div class="flex flex-wrap gap-2 mt-1">
+                  <template x-for="fld in ['INBOX','Junk','Trash','Sent','Drafts']" :key="fld">
+                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                      <input type="checkbox" :value="fld" x-model="filters.folders" class="rounded border-zinc-300 text-primary focus:ring-primary/30">
+                      <span x-text="fld"></span>
+                    </label>
+                  </template>
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-zinc-500 mb-1">Match logic</label>
+                <select x-model="filters.match_or" class="w-full text-sm border border-zinc-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  <option :value="false">AND — match all conditions</option>
+                  <option :value="true">OR — match any condition</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <button @click="preview()" :disabled="working"
+              class="flex items-center gap-2 px-5 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 disabled:opacity-50 transition-colors text-sm font-medium">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              Preview
+            </button>
+            <button @click="executeCleanup()" :disabled="working || previewResult === null"
+              class="flex items-center gap-2 px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 disabled:opacity-50 transition-colors text-sm font-medium">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              Delete
+            </button>
+            <span x-show="working" class="flex items-center gap-2 text-sm text-zinc-500"><span class="spinner"></span> Working...</span>
+          </div>
+
+          <div x-show="previewResult !== null && !deletionDone" x-transition class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-sm">Preview Results</h3>
+              <span class="badge bg-zinc-100 text-zinc-700" x-text="`${previewGrandTotal} message(s) found`"></span>
+            </div>
+            <div class="space-y-2 max-h-80 overflow-y-auto">
+              <template x-for="(res, mb) in previewResult" :key="mb">
+                <div class="border border-zinc-200 rounded-lg p-3 text-sm">
+                  <div class="font-medium text-zinc-700 mb-1" x-text="mb"></div>
+                  <div class="flex flex-wrap gap-1.5">
+                    <template x-for="(count, folder) in res.per_folder" :key="folder">
+                      <span class="badge" :class="count >= 0 ? 'bg-zinc-100 text-zinc-700' : 'bg-red-50 text-red-600'" x-text="`${folder}: ${count >= 0 ? count : 'error'}`"></span>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div x-show="deletionResult !== null" x-transition class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <h3 class="font-semibold text-sm">Result</h3>
+              <span class="badge" :class="deletionOk ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'" x-text="deletionOk ? 'Completed' : 'Had errors'"></span>
+            </div>
+            <div class="space-y-2 max-h-80 overflow-y-auto">
+              <template x-for="(res, mb) in deletionResult" :key="mb">
+                <div class="border border-zinc-200 rounded-lg p-3 text-sm">
+                  <div class="font-medium" :class="res.success ? 'text-emerald-700' : 'text-red-700'" x-text="mb"></div>
+                  <div class="flex flex-wrap gap-1.5 mt-1">
+                    <template x-for="(ok, folder) in res.per_folder" :key="folder">
+                      <span class="badge" :class="ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'" x-text="`${folder}: ${ok ? 'deleted' : 'failed'}`"></span>
+                    </template>
+                  </div>
+                  <template x-for="err in (res.errors || [])" :key="err">
+                    <div class="text-xs text-red-500 mt-1" x-text="err"></div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <div x-show="page === 'history'" class="fade-in max-w-4xl">
+          <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="font-semibold text-sm">Cleanup History</h2>
+              <button @click="loadHistory()" class="text-xs text-primary hover:underline">Refresh</button>
+            </div>
+            <div x-show="history.length === 0" class="text-sm text-zinc-400 italic py-8 text-center">No cleanup operations yet.</div>
+            <div class="space-y-2" x-show="history.length > 0">
+              <template x-for="(entry, i) in history" :key="i">
+                <div class="border border-zinc-200 rounded-lg p-3 text-sm">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-xs text-zinc-400" x-text="formatDate(entry.timestamp)"></span>
+                    <span class="badge" :class="entry.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'" x-text="entry.success ? 'OK' : 'Failed'"></span>
+                  </div>
+                  <div class="text-zinc-700">
+                    <template x-if="entry.from && entry.from.length">
+                      <span>From: <span class="font-mono text-xs" x-text="entry.from.join(', ')"></span></span>
+                    </template>
+                    <template x-if="entry.subject">
+                      <span> | Subject: <span class="font-mono text-xs" x-text="entry.subject"></span></span>
+                    </template>
+                    <template x-if="entry.age">
+                      <span> | Age: <span x-text="entry.age"></span></span>
+                    </template>
+                  </div>
+                  <div class="text-xs text-zinc-400 mt-0.5" x-text="`${entry.mailboxes.length} mailbox(es) | Folders: ${entry.folders.join(', ')}`"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <div x-show="page === 'about'" class="fade-in max-w-2xl">
+          <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 space-y-3 text-sm text-zinc-600">
+            <h2 class="font-semibold text-base text-zinc-800">About Mailcow Cleaner</h2>
+            <p>Deletes messages from mailcow mailboxes matching sender, subject, age, and folder filters.</p>
+            <p>Uses <code class="font-mono bg-zinc-100 px-1 rounded">doveadm expunge</code> via docker exec for fast bulk deletion and the mailcow REST API for domain/mailbox listing.</p>
+            <h3 class="font-semibold text-sm text-zinc-700 pt-2">Requirements</h3>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Docker socket (<code class="font-mono bg-zinc-100 px-1 rounded">/var/run/docker.sock</code>) mounted into the container</li>
+              <li>Mailcow API key with read-write access</li>
+              <li>Dovecot container accessible via <code class="font-mono bg-zinc-100 px-1 rounded">docker exec</code></li>
+            </ul>
+            <h3 class="font-semibold text-sm text-zinc-700 pt-2">How it works</h3>
+            <ol class="list-decimal pl-5 space-y-1">
+              <li>List domains/mailboxes via mailcow API</li>
+              <li>Preview matching messages using <code class="font-mono bg-zinc-100 px-1 rounded">doveadm search</code></li>
+              <li>Delete them using <code class="font-mono bg-zinc-100 px-1 rounded">doveadm expunge</code></li>
+              <li>Log results to history</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div x-show="showConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showConfirm = false" x-cloak>
+    <div class="bg-white rounded-xl shadow-xl p-6 max-w-md mx-4 fade-in">
+      <h3 class="font-semibold text-base mb-2">Confirm Deletion</h3>
+      <p class="text-sm text-zinc-600 mb-4">
+        This will <strong class="text-red-600">permanently delete</strong> <span class="font-semibold" x-text="previewGrandTotal"></span> message(s)
+        from <span class="font-semibold" x-text="targetMailboxCount"></span> mailbox(es).
+        <span class="block mt-1">This action cannot be undone.</span>
+      </p>
+      <div class="flex gap-2 justify-end">
+        <button @click="showConfirm = false" class="px-4 py-2 text-sm font-medium border border-zinc-300 rounded-lg hover:bg-zinc-50 transition-colors">Cancel</button>
+        <button @click="confirmDelete()" class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="toast.show" class="fixed bottom-6 right-6 z-50 bg-zinc-900 text-white px-4 py-3 rounded-xl shadow-lg text-sm fade-in max-w-sm" x-cloak>
+    <div class="flex items-start gap-2">
+      <span x-text="toast.message"></span>
+      <button @click="toast.show = false" class="text-zinc-400 hover:text-white ml-2">&times;</button>
+    </div>
+  </div>
+
+  <script>
+    function app() {
+      return {
+        page: 'cleanup',
+        navItems: [
+          { id: 'cleanup', label: 'Cleanup', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>' },
+          { id: 'history', label: 'History', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' },
+          { id: 'about', label: 'About', icon: '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' },
+        ],
+        config: { mailcow_url: '', api_key: '', dovecot_container: 'dovecot-mailcow', use_header: false },
+        testing: false,
+        connectionStatus: '',
+        connectionOk: false,
+        targetMode: 'domain',
+        domains: [],
+        selectedDomain: '',
+        mailboxList: [],
+        loadingMailboxes: false,
+        selectedMailboxes: [],
+        filters: { from: '', subject: '', age_value: '', age_unit: 'days', folders: ['INBOX'], match_or: false },
+        working: false,
+        previewResult: null,
+        previewGrandTotal: 0,
+        deletionResult: null,
+        deletionOk: false,
+        deletionDone: false,
+        showConfirm: false,
+        history: [],
+        toast: { show: false, message: '' },
+
+        get headerTitle() {
+          const titles = { cleanup: 'Cleanup', history: 'History', about: 'About' };
+          return titles[this.page] || 'Mailcow Cleaner';
+        },
+        get statusBadge() {
+          if (!this.config.mailcow_url) return null;
+          if (this.connectionOk) return { text: 'Connected', color: 'bg-emerald-50 text-emerald-700' };
+          return { text: 'Disconnected', color: 'bg-red-50 text-red-700' };
+        },
+        get targetMailboxCount() {
+          if (this.targetMode === 'domain') return this.mailboxList.length;
+          return this.selectedMailboxes.length;
+        },
+
+        async init() {
+          try {
+            const r = await fetch('/api/config');
+            const d = await r.json();
+            if (d.configured) {
+              this.config.mailcow_url = d.mailcow_url;
+              this.config.dovecot_container = d.dovecot_container;
+              this.config.use_header = d.use_header;
+              await this.loadDomains();
+              await this.testConnection();
+            }
+          } catch(e) {}
+        },
+
+        toastMsg(msg) { this.toast = { show: true, message: msg }; setTimeout(() => this.toast.show = false, 4000); },
+
+        async saveConfig() {
+          await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(this.config) });
+          this.toastMsg('Configuration saved');
+        },
+
+        async testConnection() {
+          this.testing = true;
+          this.connectionStatus = '';
+          try {
+            await this.saveConfig();
+            const r = await fetch('/api/test');
+            const d = await r.json();
+            this.connectionOk = d.success;
+            this.connectionStatus = d.success ? 'API: ' + d.message : 'Error: ' + d.error;
+            if (d.success) this.toastMsg('Connection OK');
+          } catch(e) {
+            this.connectionOk = false;
+            this.connectionStatus = 'Request failed: ' + e.message;
+          }
+          this.testing = false;
+        },
+
+        async loadDomains() {
+          try {
+            const r = await fetch('/api/domains');
+            const d = await r.json();
+            if (d.success) this.domains = d.domains;
+            else this.toastMsg('Failed to load domains: ' + d.error);
+          } catch(e) { this.toastMsg('Failed to load domains'); }
+        },
+
+        async fetchMailboxes() {
+          this.loadingMailboxes = true;
+          try {
+            if (this.targetMode === 'domain' && this.selectedDomain) {
+              const r = await fetch('/api/mailboxes?domain=' + encodeURIComponent(this.selectedDomain));
+              const d = await r.json();
+              if (d.success) this.mailboxList = d.mailboxes;
+            } else if (this.targetMode === 'mailboxes') {
+              const r = await fetch('/api/all-mailboxes');
+              const d = await r.json();
+              if (d.success) this.mailboxList = d.mailboxes.map(e => ({email: e, name: ''}));
+            }
+          } catch(e) { this.toastMsg('Failed to load mailboxes'); }
+          this.loadingMailboxes = false;
+        },
+
+        getEffectiveMailboxes() {
+          if (this.targetMode === 'domain') return this.mailboxList.map(m => m.email);
+          return this.selectedMailboxes;
+        },
+
+        async preview() {
+          const mailboxes = this.getEffectiveMailboxes();
+          if (!mailboxes.length) { this.toastMsg('No mailboxes selected'); return; }
+          if (!this.filters.from && !this.filters.subject && !this.filters.age_value) {
+            this.toastMsg('Add at least one filter (from, subject, or age)');
+            return;
+          }
+          this.working = true;
+          this.previewResult = null;
+          this.deletionResult = null;
+          this.deletionDone = false;
+          try {
+            const r = await fetch('/api/preview', {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({
+                mailboxes, folders: this.filters.folders, from: this.filters.from,
+                subject: this.filters.subject, age_value: this.filters.age_value ? parseInt(this.filters.age_value) : null,
+                age_unit: this.filters.age_unit, match_or: this.filters.match_or,
+              }),
+            });
+            const d = await r.json();
+            if (d.success) {
+              this.previewResult = d.results;
+              this.previewGrandTotal = d.grand_total;
+            } else {
+              this.toastMsg('Preview failed: ' + d.error);
+            }
+          } catch(e) { this.toastMsg('Preview request failed'); }
+          this.working = false;
+        },
+
+        executeCleanup() {
+          if (this.previewGrandTotal === 0) { this.toastMsg('Nothing to delete'); return; }
+          this.showConfirm = true;
+        },
+
+        async confirmDelete() {
+          this.showConfirm = false;
+          const mailboxes = this.getEffectiveMailboxes();
+          this.working = true;
+          try {
+            const r = await fetch('/api/cleanup', {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({
+                mailboxes, folders: this.filters.folders, from: this.filters.from,
+                subject: this.filters.subject, age_value: this.filters.age_value ? parseInt(this.filters.age_value) : null,
+                age_unit: this.filters.age_unit, match_or: this.filters.match_or, confirmed: true,
+              }),
+            });
+            const d = await r.json();
+            this.deletionResult = d.results;
+            this.deletionOk = d.success;
+            this.deletionDone = true;
+            this.toastMsg(d.success ? 'Cleanup completed' : 'Cleanup had errors');
+          } catch(e) { this.toastMsg('Cleanup request failed'); }
+          this.working = false;
+        },
+
+        async loadHistory() {
+          try {
+            const r = await fetch('/api/history');
+            const d = await r.json();
+            this.history = d.history;
+          } catch(e) {}
+        },
+
+        formatDate(iso) {
+          if (!iso) return '';
+          try { return new Date(iso).toLocaleString(); } catch(e) { return iso; }
+        },
+      }
+    }
+  </script>
+</body>
+</html>
